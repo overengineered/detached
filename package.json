@@ -1,0 +1,25 @@
+{
+  "name": "detached",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"PASS\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/overengineered/detached.git"
+  },
+  "files": [
+    "index.js",
+    "server.js"
+  ],
+  "author": "Juozas Kontvainis",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/overengineered/detached/issues"
+  },
+  "homepage": "https://github.com/overengineered/detached#readme",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
