@@ -7,6 +7,9 @@ function start({ log, host }) {
   const resolved = host
     ? Object.fromEntries(
         Object.entries(host).map(([route, path]) => {
+          if (!route.startsWith("/")) {
+            throw new Error(`Invalid route ${route}, must start with "/"`);
+          }
           return [route, require("path").resolve(path)];
         })
       )
@@ -33,13 +36,14 @@ function finish() {
     () => {}
   );
   transmission.on("error", (err) => {
-    console.log(`Failed to connect to server: ${err}`);
+    console.error(`Failed to connect to server: ${err}`);
   });
 }
 
 function request(path, payload) {
   return new Promise((resolve, reject) => {
-    const outgoing = JSON.stringify({ payload });
+    const { stringify, parse } = require("devalue");
+    const outgoing = stringify({ payload });
 
     const transmission = require("http")
       .request(
@@ -49,7 +53,7 @@ function request(path, payload) {
           method: "POST",
           path,
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type": "application/devalue",
             "Content-Length": Buffer.byteLength(outgoing),
           },
         },
@@ -59,7 +63,7 @@ function request(path, payload) {
           stream.on("end", () => {
             try {
               const incoming = Buffer.concat(chunks).toString("utf8");
-              const data = JSON.parse(incoming);
+              const data = parse(incoming);
               resolve(data.result);
             } catch (e) {
               reject(e);

@@ -1,12 +1,12 @@
 const express = require("express");
+const { stringify, parse } = require("devalue");§
 
 console.log(`[${Date.now()}] Start ${JSON.stringify(global.config)}`);
 
 const app = express();
 const port = global.config.port || 8007;
 
-app.use(express.text());
-app.use(express.json());
+app.use(express.text({ type: "application/devalue" }));
 
 app.get("/finish", (req, res) => {
   console.log(`[${Date.now()}] Exit requested`);
@@ -21,11 +21,11 @@ global.config.host &&
       throw new Error(`Cannot host ${typeof handle} on ${route}`);
     }
     app.post(`${route}`, (req, res) => {
-      const data = req.body;
-      console.log(`[${Date.now()}] requested ${route} ${JSON.stringify(data)}`);
+      const data = parse(req.body);
+      console.log(`[${Date.now()}] requested ${route} ${stringify(data)}`);
       handle(data.payload).then((result) => {
-        console.log(`[${Date.now()}] computed ${JSON.stringify(result)}`);
-        res.json({ result });
+        console.log(`[${Date.now()}] computed ${stringify(result)}`);
+        res.send(stringify({ result }));
       });
     });
   });
