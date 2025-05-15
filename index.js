@@ -1,16 +1,20 @@
-function start({ log, host }) {
-  const fs = require("fs");
-  const spawn = require("child_process").spawn;
+import fs from "node:fs";
+import path from "node:path";
+import http from "node:http";
+import { spawn } from "node:child_process";
+import { stringify, parse } from "devalue";
+
+export function start({ log, host, runtime }) {
   if (typeof log !== "string") {
-    throw new Error(`Unsupported value for log: ${typeof log}`);
+    throw new Error(`Please provide file for logs: ${typeof log}`);
   }
   const resolved = host
     ? Object.fromEntries(
-        Object.entries(host).map(([route, path]) => {
+        Object.entries(host).map(([route, filePath]) => {
           if (!route.startsWith("/")) {
             throw new Error(`Invalid route ${route}, must start with "/"`);
           }
-          return [route, require("path").resolve(path)];
+          return [route, path.resolve(filePath)];
         })
       )
     : undefined;
@@ -19,8 +23,8 @@ function start({ log, host }) {
   const err = fs.openSync(log, "a");
 
   var child = spawn(
-    "node",
-    ["--eval", `global.config = ${config};require("detached/server");`],
+    runtime || process.argv0 || "node",
+    ["--eval", `global.config=${config};import("detached/server");`],
     {
       detached: true,
       stdio: ["ignore", out, err],
@@ -30,22 +34,18 @@ function start({ log, host }) {
   child.unref();
 }
 
-function finish() {
-  const transmission = require("http").get(
-    "http://127.0.0.1:8007/finish",
-    () => {}
-  );
+export function finish() {
+  const transmission = http.get("http://127.0.0.1:8007/finish", () => {});
   transmission.on("error", (err) => {
     console.error(`Failed to connect to server: ${err}`);
   });
 }
 
-function request(path, payload) {
+export function request(path, payload) {
   return new Promise((resolve, reject) => {
-    const { stringify, parse } = require("devalue");
     const outgoing = stringify({ payload });
 
-    const transmission = require("http")
+    const transmission = http
       .request(
         {
           hostname: "127.0.0.1",
@@ -53,18 +53,21 @@ function request(path, payload) {
           method: "POST",
           path,
           headers: {
-            "Content-Type": "application/devalue",
+            "Content-Type": "text/devalue",
             "Content-Length": Buffer.byteLength(outgoing),
           },
         },
-        (stream) => {
+        (incoming) => {
           const chunks = [];
-          stream.on("data", (chunk) => chunks.push(chunk));
-          stream.on("end", () => {
+          incoming.on("data", (chunk) => chunks.push(chunk));
+          incoming.on("end", () => {
             try {
-              const incoming = Buffer.concat(chunks).toString("utf8");
-              const data = parse(incoming);
-              resolve(data.result);
+              const text = Buffer.concat(chunks).toString("utf8");
+              const output =
+                incoming.headers["content-type"] === "text/plain"
+                  ? text
+                  : parse(text).result;
+              resolve(output);
             } catch (e) {
               reject(e);
             }
@@ -81,8 +84,9 @@ function request(path, payload) {
   });
 }
 
-module.exports = {
-  start,
-  finish,
-  request,
-};
+export async function loadModuleFromCwd(filePath) {
+  const resolvedPath = path.resolve(filePath);
+  const stats = fs.statSync(resolvedPath);
+  const mtime = stats.mtime.getTime();
+  return import(`${resolvedPath}?${mtime}`);
+}
